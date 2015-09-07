@@ -330,6 +330,9 @@ void OctomapServer::insertCloudCallback(const sensor_msgs::PointCloud2::ConstPtr
 
 void OctomapServer::scannedPointsCallback(const octomap_server::ScannedPoints::ConstPtr& msg)
 {
+  std::cerr << "GOT HERE!!!!!!!" << std::endl;
+
+
   std::vector<double> x_occ = msg->x_occ;
   std::vector<double> y_occ = msg->y_occ;
   std::vector<double> z_occ = msg->z_occ;
@@ -338,15 +341,108 @@ void OctomapServer::scannedPointsCallback(const octomap_server::ScannedPoints::C
   std::vector<double> y_free = msg->y_free;
   std::vector<double> z_free = msg->z_free;
 
+  std::cerr << "x_occ = " << x_occ.size() << std::endl;
+  std::cerr << "x_free = " << x_free.size() << std::endl;
+
+  octomap::point3d point2(x_free[0],y_free[0],z_free[0]);
+  std::cerr << "free[0] = " << x_free[0] << ", " << y_free[0] << ", " << z_free[0] << std::endl;
+  OcTreeKey key2;
+  if (!m_octree->coordToKeyChecked(point2, key2)) 
+  {
+    octomap::OcTreeNode *node = m_octree->search(point2);
+    std::cerr << "node is occupied? " << m_octree->isNodeOccupied(node) << std::endl;
+    std::cerr << "log odds: " << node->getLogOdds() << std::endl;
+    std::cerr << "probability: " << node->getOccupancy() << std::endl;
+  }
+  else
+  {
+    std::cerr << "KEY COULD NOT BE FOUND" << std::endl;
+  }
+
+
+ 
+
+  KeySet free_cells, occupied_cells;
+
   for (unsigned int i = 0; i < x_occ.size(); ++i)
   {
-    m_octree->updateNode(octomap::point3d(x_occ[i],y_occ[i],z_occ[i]), true);
+    octomap::point3d point(x_occ[i],y_occ[i],z_occ[i]);
+    OcTreeKey key;
+    if (m_octree->coordToKeyChecked(point, key))
+    {
+      std::cerr << "PROBLEM!!!" << std::endl;
+      exit(0);
+    }
+    else 
+    {
+      occupied_cells.insert(key);
+      updateMinKey(key, m_updateBBXMin);
+      updateMaxKey(key, m_updateBBXMax);
+    }
   }
 
   for (unsigned int i = 0; i < x_free.size(); ++i)
   {
-    m_octree->updateNode(octomap::point3d(x_free[i],y_free[i],z_free[i]), false);
+    octomap::point3d point(x_free[i],y_free[i],z_free[i]);
+    OcTreeKey key;
+    if (!m_octree->coordToKeyChecked(point, key))
+    {
+      std::cerr << "PROBLEM!!!" << std::endl;
+      exit(0);
+    }
+    else 
+    {
+      free_cells.insert(key);
+      updateMinKey(key, m_updateBBXMin);
+      updateMaxKey(key, m_updateBBXMax);
+    }
   }
+
+  // mark free cells only if not seen occupied in this cloud
+  for(KeySet::iterator it = free_cells.begin(), end=free_cells.end(); it!= end; ++it){
+    if (occupied_cells.find(*it) == occupied_cells.end()){
+      m_octree->updateNode(*it, false);
+    }
+  }
+
+  // now mark all occupied cells:
+  for (KeySet::iterator it = occupied_cells.begin(), end=occupied_cells.end(); it!= end; it++) {
+    m_octree->updateNode(*it, true);
+  }
+
+  octomap::point3d minPt, maxPt;
+  ROS_DEBUG_STREAM("Bounding box keys (before): " << m_updateBBXMin[0] << " " <<m_updateBBXMin[1] << " " << m_updateBBXMin[2] << " / " <<m_updateBBXMax[0] << " "<<m_updateBBXMax[1] << " "<< m_updateBBXMax[2]);
+  std::cerr << "Bounding box keys (before): " << m_updateBBXMin[0] << " " <<m_updateBBXMin[1] << " " << m_updateBBXMin[2] << " / " <<m_updateBBXMax[0] << " "<<m_updateBBXMax[1] << " "<< m_updateBBXMax[2] << std::endl;
+
+  // TODO: we could also limit the bbx to be within the map bounds here (see publishing check)
+  minPt = m_octree->keyToCoord(m_updateBBXMin);
+  maxPt = m_octree->keyToCoord(m_updateBBXMax);
+  ROS_DEBUG_STREAM("Updated area bounding box: "<< minPt << " - "<<maxPt);
+  ROS_DEBUG_STREAM("Bounding box keys (after): " << m_updateBBXMin[0] << " " <<m_updateBBXMin[1] << " " << m_updateBBXMin[2] << " / " <<m_updateBBXMax[0] << " "<<m_updateBBXMax[1] << " "<< m_updateBBXMax[2]);
+  std::cerr << "Updated area bounding box: "<< minPt << " - "<<maxPt << std::endl;
+  std::cerr << "Bounding box keys (after): " << m_updateBBXMin[0] << " " <<m_updateBBXMin[1] << " " << m_updateBBXMin[2] << " / " <<m_updateBBXMax[0] << " "<<m_updateBBXMax[1] << " "<< m_updateBBXMax[2] << std::endl;
+
+  octomap::point3d point3(x_free[0],y_free[0],z_free[0]);
+  std::cerr << "free[0] = " << x_free[0] << ", " << y_free[0] << ", " << z_free[0] << std::endl;
+
+  OcTreeKey key3;
+  if (m_octree->coordToKeyChecked(point3, key3)) 
+  {
+    octomap::OcTreeNode *node = m_octree->search(point3);
+    std::cerr << "node is occupied? " << m_octree->isNodeOccupied(node) << std::endl;
+    std::cerr << "log odds: " << node->getLogOdds() << std::endl;
+    std::cerr << "probability: " << node->getOccupancy() << std::endl;
+  }
+  else
+  {
+    std::cerr << "END: KEY COULD NOT BE FOUND" << std::endl;
+  }
+
+  if (m_compressMap)
+    m_octree->prune();
+
+  m_octree->writeBinary("/Users/wtabib/Downloads/binaryMap.bt");
+  exit(0);
 
 }
 
