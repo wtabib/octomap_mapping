@@ -330,6 +330,23 @@ void OctomapServer::insertCloudCallback(const sensor_msgs::PointCloud2::ConstPtr
 
 void OctomapServer::scannedPointsCallback(const octomap_server::ScannedPoints::ConstPtr& msg)
 {
+  std::vector<double> x_occ = msg->x_occ;
+  std::vector<double> y_occ = msg->y_occ;
+  std::vector<double> z_occ = msg->z_occ;
+
+  std::vector<double> x_free = msg->x_free;
+  std::vector<double> y_free = msg->y_free;
+  std::vector<double> z_free = msg->z_free;
+
+  for (unsigned int i = 0; i < x_occ.size(); ++i)
+  {
+    m_octree->updateNode(octomap::point3d(x_occ[i],y_occ[i],z_occ[i]), true);
+  }
+
+  for (unsigned int i = 0; i < x_free.size(); ++i)
+  {
+    m_octree->updateNode(octomap::point3d(x_free[i],y_free[i],z_free[i]), false);
+  }
 
 }
 
