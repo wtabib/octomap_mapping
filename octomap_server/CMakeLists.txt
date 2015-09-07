@@ -22,6 +22,7 @@ find_package(catkin REQUIRED COMPONENTS ${PACKAGE_DEPENDENCIES})
 find_package(PCL REQUIRED QUIET COMPONENTS common sample_consensus io segmentation filters)
 
 find_package(octomap REQUIRED)
+find_package(message_generation)
 add_definitions(-DOCTOMAP_NODEBUGOUT)
 
 include_directories(
@@ -34,11 +35,21 @@ include_directories(
 
 generate_dynamic_reconfigure_options(cfg/OctomapServer.cfg)
 
+add_message_files(
+    FILES
+    ScannedPoints.msg
+)
+
+generate_messages(
+      DEPENDENCIES
+        std_msgs
+)
+
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES ${PROJECT_NAME}
   CATKIN_DEPENDS ${PACKAGE_DEPENDENCIES}
-  DEPENDS octomap PCL
+  DEPENDS octomap PCL message_runtime
 )
 
 set(LINK_LIBS
